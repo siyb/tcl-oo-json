@@ -39,6 +39,19 @@ puts [$myInstance toJSON]
 
 ```
 
+Results in:
+
+```json
+
+{
+  "__INSTANCE": "OBJ|::MyClass",
+  "iAmAnInt": 2,
+  "iAmAFloat": 1.5,
+  "iAmAString": "string!"
+}
+
+```
+
 Refer to [example.tcl](../blob/master/example.tcl) for a more complex example,
 that covers all available features.
 

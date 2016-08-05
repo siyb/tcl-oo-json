@@ -6,15 +6,19 @@ namespace eval org::geekosphere::json {
 			set output "{"
 			# meta information
 			append output "\"__INSTANCE\":\"OBJ|[info object class [self]]\","
-			
+
 			# check if there are fields marked as lists
 			set knownLists [my getKnownLists $variableList]
-			
+
+			# ignored fields
+			set ignoredFields [my getIgnoredFields $variableList]
+
 			for {set i 0} {$i < [llength $variableList]} {incr i} {
 				set var [lindex $variableList $i]
+				if {[my isOnList $ignoredFields $var]} { continue }
 				set varRef [info object namespace [self]]::$var
-				
-				if {[my isKnownList $knownLists $var]} {
+
+				if {[my isOnList $knownLists $var]} {
 					append output [my writeList $var [set $varRef]]
 				} elseif {[array exists $varRef]} {
 					append output [my writeArray $var $varRef]
@@ -28,26 +32,35 @@ namespace eval org::geekosphere::json {
 			}
 			append output "}"
 		}
-		
-		method getKnownLists {variableList} {
-			if {[lsearch $variableList "__LISTS"] != -1} {
-				return [set [info object namespace [self]]::__LISTS]
+
+		method getFieldValue {variableList field} {
+			if {[lsearch $variableList "$field"] != -1} {
+				return [set [info object namespace [self]]::$field]
 			}
 			return []
 		}
-		
-		method isKnownList {knownLists var} {
-			return [expr [lsearch $knownLists $var] != -1]
+
+		method getIgnoredFields {variableList} {
+			return [my getFieldValue $variableList "__IGNORE"]
 		}
-		
+
+		method getKnownLists {variableList} {
+			return [my getFieldValue $variableList "__LISTS"]
+
+		}
+
+		method isOnList {list var} {
+			return [expr [lsearch $list $var] != -1]
+		}
+
 		method writeField {var content} {
 			if {$var eq "__INSTANCE"} { error "The __INSTANCE field is reserved any may not be used as a variable name!" }
-			if {$var eq "__LISTS"} { return -code continue};# signal the variable list loop to continue processing, because the __LIST meta info is _not_ written to json!
+			if {$var eq "__LISTS" || $var eq "__IGNORE"} { return -code continue};# signal the variable list loop to continue processing, meta info is not serialized
 			append output "\"$var\":"
 			append output [my getJsonType $content]
 			return $output
 		}
-		
+
 		method writeList {var content} {
 			append output "\"$var\":"
 			append output "\["
@@ -60,7 +73,7 @@ namespace eval org::geekosphere::json {
 			append output "\]"
 			return $output
 		}
-		
+
 		method writeArray {var varRef} {
 			append output "\"$var\":"
 			append output "{"
@@ -77,18 +90,18 @@ namespace eval org::geekosphere::json {
 			append output "}"
 			return $output
 		}
-		
+
 		method getJsonType {content} {
 			if {[info object isa object $content] && [info object isa typeof $content org::geekosphere::json::JsonSerializer]} {
 				return "[$content toJSON]"
 			} elseif {[string is double $content]} {
-				return "$content"	
+				return "$content"
 			} else {
 				return "\"$content\""
 			}
 		}
-		
-		unexport writeField writeList writeArray isKnownList getKnownLists getJsonType
+
+		unexport writeField writeList writeArray isKnownList getKnownLists getJsonType getIgnoredFields
 	}
 }
 

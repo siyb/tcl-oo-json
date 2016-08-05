@@ -51,6 +51,7 @@ data are known to tcloojson:
 |------------|------------------------------|----------|-----------|
 | __INSTANCE | transports object class type | implicit | yes       |
 | __LISTS    | explicitly declare lists     | explicit | no        |
+| __IGNORE   | ignoring fields              | explicit | no        |
 
 ### __INSTANCE
 
@@ -67,6 +68,11 @@ to be declared implicitly by the user. It contains a TCL list of all TCL lists c
 in the class, that need to be treated as lists during the serialization process. The __LISTS
 field will NOT be serialized and will therefore not appear in the generated JSON. If a TCL
 list is declared as a list, it is serialized as a JSON array.
+
+## __IGNORE
+
+The __IGNORE list contains all fields that should be ignore. As with __LISTS, users
+must explicitly ignore fields. The __IGNORE field is not persisted to JSON.
 
 ## License
 

@@ -18,9 +18,12 @@ oo::class create A {
 	constructor {} {
 		my variable woot
 		my variable lol
+		my variable iAmIgnored
 		my variable thisIsARealList
 		my variable __LISTS
+		my variable __IGNORE
 		set lol "asdasd"
+		set iAmIgnored "IGNORE ME!!!!!"
 		set woot 1
 		set thisIsARealList [list this is a real list! with 0.1 doubles and objects [B new]]
 		set anotherB [B new]
@@ -28,6 +31,8 @@ oo::class create A {
 		# since TCL lists are always strings, we need to declare lists manually, the __LISTS field only contains meta data
 		# and will not be serialized to JSON.
 		set __LISTS [list thisIsARealList]
+
+		set __IGNORE [list iAmIgnored]
 	}
 }
 

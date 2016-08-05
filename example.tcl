@@ -24,7 +24,7 @@ oo::class create A {
 		set woot 1
 		set thisIsARealList [list this is a real list! with 0.1 doubles and objects [B new]]
 		set anotherB [B new]
-		
+
 		# since TCL lists are always strings, we need to declare lists manually, the __LISTS field only contains meta data
 		# and will not be serialized to JSON.
 		set __LISTS [list thisIsARealList]

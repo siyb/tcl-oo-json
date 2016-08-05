@@ -101,7 +101,7 @@ namespace eval org::geekosphere::json {
 			}
 		}
 
-		unexport writeField writeList writeArray isKnownList getKnownLists getJsonType getIgnoredFields
+		unexport writeField writeList writeArray isOnList getKnownLists getJsonType getIgnoredFields
 	}
 }
 

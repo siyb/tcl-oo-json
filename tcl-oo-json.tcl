@@ -65,11 +65,15 @@ namespace eval org::geekosphere::json {
 			append output "\"$var\":"
 			append output "{"
 			append output "\"__INSTANCE\":\"OBJ|ARRAY\","; # array meta
-			foreach {arrayKey arrayVal} [array get $varRef] {
+			set arr [array get $varRef]
+			for {set i 0} {$i < [llength $arr]} {incr i 2} {
+				set arrayKey [lindex $arr $i]
+				set arrayVal [lindex $arr [expr $i + 1]]
 				append output [my writeField $arrayKey $arrayVal]
-				append output ","
+				if {$i < [expr [llength $arr] - 2]} {
+					append output ","
+				}
 			}
-			set output [string trimright $output ","]
 			append output "}"
 			return $output
 		}

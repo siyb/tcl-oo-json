@@ -52,7 +52,7 @@ Results in:
 
 ```
 
-Refer to [example.tcl](../blob/master/example.tcl) for a more complex example,
+Refer to [example.tcl](../master/example.tcl) for a more complex example,
 that covers all available features.
 
 ## Explicit / Implicit Meta Data

@@ -1,35 +1,58 @@
 namespace eval org::geekosphere::json {
+
+	oo::class create JsonDeserializer {
+
+		method fromJSON {jsonInput} {
+			set channel [chan create {read write} [org::geekosphere::json::StringChannel new $jsonInput]]
+			return [my fromJSONChannel $channel]
+		}
+
+		method fromJSONChannel {channel} {
+			set jsonStreamParser [org::geekosphere::json::JsonStreamParser new $channel [self]]
+			$jsonStreamParser parse
+		}
+
+		method on {type character} {
+			puts "type: $type character: $character"
+		}
+	}
+
 	oo::class create JsonSerializer {
 
 		method toJSON {} {
 			set variableList [info object vars [self]]
+			set variableListLength [llength $variableList]
+
 			set output "{"
 			# meta information
-			append output "\"__INSTANCE\":\"OBJ|[info object class [self]]\","
+			append output "\"__INSTANCE\":\"OBJ|[info object class [self]]\""
 
-			# check if there are fields marked as lists
-			set knownLists [my getKnownLists $variableList]
+			if {$variableListLength != 0} {
+				append output ","
 
-			# ignored fields
-			set ignoredFields [my getIgnoredFields $variableList]
+				# check if there are fields marked as lists
+				set knownLists [my getKnownLists $variableList]
 
-			set variableListLength [llength $variableList]
-			for {set i 0} {$i < $variableListLength} {incr i} {
-				set var [lindex $variableList $i]
-				if {[my isOnList $ignoredFields $var]} { continue }
-				set varRef [info object namespace [self]]::$var
+				# ignored fields
+				set ignoredFields [my getIgnoredFields $variableList]
 
-				if {[my isOnList $knownLists $var]} {
-					append output [my writeList $var [set $varRef]]
-				} elseif {[array exists $varRef]} {
-					append output [my writeArray $var $varRef]
-				} else {
-					set content [set $varRef]
-					append output [my writeField $var $content]
-				}
-				set ignoredFieldsLength [llength $ignoredFields]
-				if {$i < [expr {$variableListLength - (1 + $ignoredFieldsLength)}]} {
-					append output ","
+				for {set i 0} {$i < $variableListLength} {incr i} {
+					set ignoredFieldsLength [llength $ignoredFields]
+					set var [lindex $variableList $i]
+					if {[my isOnList $ignoredFields $var]} { continue }
+					set varRef [self object]::$var
+
+					if {[my isOnList $knownLists $var]} {
+						append output [my writeList $var [set $varRef]]
+					} elseif {[array exists $varRef]} {
+						append output [my writeArray $var $varRef]
+					} else {
+						set content [set $varRef]
+						append output [my writeField $var $content]
+					}
+					if {$i < [expr {$variableListLength - (1 + $ignoredFieldsLength)}]} {
+						append output ","
+					}
 				}
 			}
 			append output "}"
@@ -107,6 +130,111 @@ namespace eval org::geekosphere::json {
 		}
 
 		unexport writeField writeList writeArray isOnList getKnownLists getJsonType getIgnoredFields
+	}
+
+	oo::class create JsonStreamParser {
+		variable channel listener stack
+
+		constructor {channel_ listener_} {
+			set channel $channel_
+			set listener $listener_
+			set stack [org::geekosphere::json::Stack new]
+		}
+
+		method parse {} {
+			while {![chan eof $channel]} {
+				set c [chan read $channel 1]
+				switch $c {
+					"\{" { my registerCharacter OBJSTART $c }
+					"\}" { my registerCharacter OBJEND $c }
+					"\[" { my registerCharacter ARRSTART $c}
+					"\]" { my registerCharacter ARREND $c }
+					":" { my registerCharacter SEP $c }
+					"\"" { my registerCharacter QUOTE $c }
+					default { my registerCharacter CONTENT $c }
+				}
+			}
+		}
+
+		method registerCharacter {type character} {
+			$stack push $type
+			$listener on $type $character
+		}
+
+		unexport registerCharacter
+	}
+
+	oo::class create Stack {
+		variable stackList
+
+		constructor {} {}
+
+		method push {i} {
+			lappend stackList $i
+		}
+
+		method pop {} {
+			set result [my peek]
+			set stackList [lreplace $stackList end end]
+			return $result
+		}
+
+		method peek {} {
+			return [lindex $pathList end]
+		}
+
+		method isEmpty {} {
+			return [expr {[llength $stackList] == 0}]
+		}
+	}
+
+	# Taken and adjusted from http://tcl.tk/man/tcl8.6/TclCmd/refchan.htm
+	oo::class create StringChannel {
+		variable data pos encoding
+
+		constructor {{enc {}}} {
+			if {$enc eq ""} {set encoding [encoding system]}
+		}
+
+		constructor {string {enc {}}} {
+			if {$enc eq ""} {set encoding [encoding system]}
+			set data [encoding convertto $encoding $string]
+			set pos 0
+		}
+
+		method initialize {ch mode} { return [list initialize finalize watch read seek write] }
+
+		method finalize {ch} { my destroy }
+
+		method watch {ch events} {}
+
+		method read {ch count} {
+			set d [string range $data $pos [expr {$pos+$count-1}]]
+			incr pos [string length $d]
+			return $d
+		}
+
+		method write {ch inputData} {
+			append data [encoding convertto $encoding $inputData]
+			return [llength $inputData]
+		}
+
+		method seek {ch offset base} {
+			switch $base {
+				start { set pos $offset }
+				current { incr pos $offset }
+				end {
+					set pos [string length $data]
+					incr pos $offset
+				}
+			}
+			if {$pos < 0} {
+				set pos 0
+			} elseif {$pos > [string length $data]} {
+				set pos [string length $data]
+			}
+			return $pos
+		}
 	}
 }
 

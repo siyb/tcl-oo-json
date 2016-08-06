@@ -57,21 +57,25 @@ oo::class create Gender {
 #
 
 oo::define Person {
-	mixin org::geekosphere::json::JsonSerializer
+	mixin org::geekosphere::json::JsonSerializer org::geekosphere::json::JsonDeserializer
 }
 
 oo::define Hobby {
-	mixin org::geekosphere::json::JsonSerializer
+	mixin org::geekosphere::json::JsonSerializer;# org::geekosphere::json::JsonDeserializer
 }
 
 oo::define Gender {
-	mixin org::geekosphere::json::JsonSerializer
+	mixin org::geekosphere::json::JsonSerializer;# org::geekosphere::json::JsonDeserializer
 }
 
 #
 # Creating an instance of C and serializing object graph
 #
 
-set t [Person new]
+set toJsonPerson [Person new]
+set jsonData [$toJsonPerson toJSON]
 
-puts [$t toJSON]
+puts $jsonData
+
+set fromJsonPerson [Person new]
+$fromJsonPerson fromJSON $jsonData

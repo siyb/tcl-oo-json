@@ -13,7 +13,8 @@ namespace eval org::geekosphere::json {
 			# ignored fields
 			set ignoredFields [my getIgnoredFields $variableList]
 
-			for {set i 0} {$i < [llength $variableList]} {incr i} {
+			set variableListLength [llength $variableList]
+			for {set i 0} {$i < $variableListLength} {incr i} {
 				set var [lindex $variableList $i]
 				if {[my isOnList $ignoredFields $var]} { continue }
 				set varRef [info object namespace [self]]::$var
@@ -26,7 +27,8 @@ namespace eval org::geekosphere::json {
 					set content [set $varRef]
 					append output [my writeField $var $content]
 				}
-				if {$i < [expr [llength $variableList] - 1]} {
+				set ignoredFieldsLength [llength $ignoredFields]
+				if {$i < [expr {$variableListLength - (1 + $ignoredFieldsLength)}]} {
 					append output ","
 				}
 			}
@@ -50,7 +52,8 @@ namespace eval org::geekosphere::json {
 		}
 
 		method isOnList {list var} {
-			return [expr [lsearch $list $var] != -1]
+			set searchResult [lsearch $list $var]
+			return [expr {$searchResult != -1}]
 		}
 
 		method writeField {var content} {
@@ -62,11 +65,12 @@ namespace eval org::geekosphere::json {
 		}
 
 		method writeList {var content} {
+			set contentLength [llength $content]
 			append output "\"$var\":"
 			append output "\["
-			for {set i 0} {$i < [llength $content]} {incr i} {
+			for {set i 0} {$i < $contentLength} {incr i} {
 				append output [my getJsonType [lindex $content $i]]
-				if {$i < [expr [llength $content] - 1]} {
+				if {$i < [expr {$contentLength - 1}]} {
 					append output ","
 				}
 			}
@@ -79,11 +83,12 @@ namespace eval org::geekosphere::json {
 			append output "{"
 			append output "\"__INSTANCE\":\"OBJ|ARRAY\","; # array meta
 			set arr [array get $varRef]
-			for {set i 0} {$i < [llength $arr]} {incr i 2} {
+			set arrLength [llength $arr]
+			for {set i 0} {$i < $arrLength} {incr i 2} {
 				set arrayKey [lindex $arr $i]
-				set arrayVal [lindex $arr [expr $i + 1]]
+				set arrayVal [lindex $arr [expr {$i + 1}]]
 				append output [my writeField $arrayKey $arrayVal]
-				if {$i < [expr [llength $arr] - 2]} {
+				if {$i < [expr {$arrLength - 2}]} {
 					append output ","
 				}
 			}

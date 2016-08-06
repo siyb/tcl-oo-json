@@ -13,7 +13,7 @@ namespace eval org::geekosphere::json {
 		}
 
 		method on {type character} {
-			puts "type: $type character: $character"
+			puts "type: $type character: '$character'"
 		}
 	}
 
@@ -133,31 +133,118 @@ namespace eval org::geekosphere::json {
 	}
 
 	oo::class create JsonStreamParser {
-		variable channel listener stack
+		variable channel listener
 
 		constructor {channel_ listener_} {
 			set channel $channel_
 			set listener $listener_
-			set stack [org::geekosphere::json::Stack new]
 		}
 
 		method parse {} {
+			set stateStack [org::geekosphere::json::Stack new]
+			set tokenNumber 0
+
+			$stateStack push "NONE"
+
 			while {![chan eof $channel]} {
+				incr tokenNumber
 				set c [chan read $channel 1]
+
+				set state [$stateStack peek]
+
 				switch $c {
-					"\{" { my registerCharacter OBJSTART $c }
-					"\}" { my registerCharacter OBJEND $c }
-					"\[" { my registerCharacter ARRSTART $c}
-					"\]" { my registerCharacter ARREND $c }
-					":" { my registerCharacter SEP $c }
-					"\"" { my registerCharacter QUOTE $c }
-					default { my registerCharacter CONTENT $c }
+					"\{" 	{
+						if {$state eq "NONE" || $state eq "WAITING_FOR_FIELDVALUE" || $state eq "ARRAY"} {
+							if {[$stateStack peek] eq "WAITING_FOR_FIELDVALUE"} {
+								$stateStack pop
+							}
+							$stateStack push "OBJECT"
+							my registerCharacter OBJ_START $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"\}" 	{
+						if {$state eq "OBJECT"} {
+							$stateStack popExpect "OBJECT"
+							my registerCharacter OBJ_END $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"\[" 	{
+						if {$state eq "WAITING_FOR_FIELDVALUE"} {
+							$stateStack popExpect "WAITING_FOR_FIELDVALUE"
+							$stateStack push "ARRAY"
+							my registerCharacter ARR_START $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"\]" 	{
+						if {$state eq "ARRAY"} {
+							$stateStack popExpect "ARRAY"
+							my registerCharacter ARR_END $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					":" 	{
+						if {$state eq "FIELDVALUE" || $state eq "FIELDNAME"} {
+							my registerCharacter CHAR $c
+						} elseif {$state eq "OBJECT"} {
+							$stateStack push "WAITING_FOR_FIELDVALUE"
+							my registerCharacter KV_SEPERATOR $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"\"" 	{
+						if {$state eq "OBJECT" || $state eq "WAITING_FOR_NEXT_ELEMENT"} {
+							if {[$stateStack peek] eq "WAITING_FOR_NEXT_ELEMENT"} {
+								$stateStack popExpect "WAITING_FOR_NEXT_ELEMENT"
+							}
+							$stateStack push "FIELDNAME"
+							my registerCharacter FIELDNAME_START $c
+						} elseif {$state eq "FIELDNAME"} {
+							$stateStack popExpect "FIELDNAME"
+							my registerCharacter FIELDNAME_END $c
+						} elseif {$state eq "WAITING_FOR_FIELDVALUE"} {
+							$stateStack popExpect "WAITING_FOR_FIELDVALUE"
+							$stateStack push "FIELDVALUE"
+							my registerCharacter FIELDVALUE_START $c
+						} elseif {$state eq "FIELDVALUE"} {
+							$stateStack popExpect "FIELDVALUE"
+							my registerCharacter FIELDVALUE_END $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"," 	{
+						if {$state eq "FIELVALUE" || $state eq "FIELDNAME"} {
+							my registerCharacter CHAR $c
+						} elseif {$state eq "OBJECT" || $state eq "NONE"} {
+							$stateStack push "WAITING_FOR_NEXT_ELEMENT"
+							my registerCharacter PAIR_SEPERATOR $c
+						} elseif {$state eq "ARRAY"} {
+							my registerCharacter ARRAY_ITEM_SEPERATOR $c
+						} else {
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+						}
+					}
+					"\\"	{ my registerCharacter CHAR $c }
+					default { my registerCharacter CHAR $c }
+				}
+
+				set newState [$stateStack peek]
+				if {$state ne $newState} {
+					puts "FROM STATE: $state"
+					puts "TO STATE: [$stateStack peek] -> [$stateStack getStack]"
 				}
 			}
 		}
 
 		method registerCharacter {type character} {
-			$stack push $type
 			$listener on $type $character
 		}
 
@@ -179,12 +266,32 @@ namespace eval org::geekosphere::json {
 			return $result
 		}
 
+		method popExpect {args} {
+			set result [my peek]
+			set ok 0
+			foreach expected $args {
+				if {$expected eq $result} {
+					set ok 1
+					break
+				}
+			}
+			if {!$ok} {
+				error "Expect failed: $expect - $result"
+			}
+			set stackList [lreplace $stackList end end]
+			return $result
+		}
+
 		method peek {} {
-			return [lindex $pathList end]
+			return [lindex $stackList end]
 		}
 
 		method isEmpty {} {
 			return [expr {[llength $stackList] == 0}]
+		}
+
+		method getStack {} {
+			return [lreverse $stackList]
 		}
 	}
 

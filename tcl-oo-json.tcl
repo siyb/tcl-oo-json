@@ -146,12 +146,17 @@ namespace eval org::geekosphere::json {
 
 			$stateStack push "NONE"
 
+			set json ""
+
+			set fieldNameTemp ""
+			set fieldValueTemp ""
+			set fieldName ""
+
 			while {![chan eof $channel]} {
 				incr tokenNumber
 				set c [chan read $channel 1]
-
+				lappend json $c
 				set state [$stateStack peek]
-
 				switch $c {
 					"\{" 	{
 						if {$state eq "NONE" || $state eq "WAITING_FOR_FIELDVALUE" || $state eq "ARRAY"} {
@@ -159,7 +164,8 @@ namespace eval org::geekosphere::json {
 								$stateStack pop
 							}
 							$stateStack push "OBJECT"
-							my registerCharacter OBJ_START $c
+						} elseif {$state eq "WAITING_FOR_NEXT_ELEMENT"} {
+							$stateStack popExpect "WAITING_FOR_NEXT_ELEMENT"
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
@@ -167,7 +173,13 @@ namespace eval org::geekosphere::json {
 					"\}" 	{
 						if {$state eq "OBJECT"} {
 							$stateStack popExpect "OBJECT"
-							my registerCharacter OBJ_END $c
+						} elseif {$state eq "FIELDVALUE"} {
+							$stateStack popExpect "FIELDVALUE"
+							$stateStack popExpect "OBJECT"
+							puts "FIELDNAME: $fieldName FIELDVALUE: $fieldValueTemp"
+							set fieldName ""
+							set fieldValueTemp ""
+							# TODO: check if datatype is valid!
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
@@ -176,7 +188,6 @@ namespace eval org::geekosphere::json {
 						if {$state eq "WAITING_FOR_FIELDVALUE"} {
 							$stateStack popExpect "WAITING_FOR_FIELDVALUE"
 							$stateStack push "ARRAY"
-							my registerCharacter ARR_START $c
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
@@ -184,17 +195,17 @@ namespace eval org::geekosphere::json {
 					"\]" 	{
 						if {$state eq "ARRAY"} {
 							$stateStack popExpect "ARRAY"
-							my registerCharacter ARR_END $c
 						} else {
-							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
+							error "Encountered $c in wrong state ${state} - Char: $tokenNumber [$stateStack getStack]"
 						}
 					}
 					":" 	{
-						if {$state eq "FIELDVALUE" || $state eq "FIELDNAME"} {
-							my registerCharacter CHAR $c
+						if {$state eq "FIELDNAME"} {
+							append fieldNameTemp $c
+						} elseif {$state eq "FIELDVALUE"} {
+							append fieldValueTemp $c
 						} elseif {$state eq "OBJECT"} {
 							$stateStack push "WAITING_FOR_FIELDVALUE"
-							my registerCharacter KV_SEPERATOR $c
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
@@ -205,41 +216,54 @@ namespace eval org::geekosphere::json {
 								$stateStack popExpect "WAITING_FOR_NEXT_ELEMENT"
 							}
 							$stateStack push "FIELDNAME"
-							my registerCharacter FIELDNAME_START $c
 						} elseif {$state eq "FIELDNAME"} {
 							$stateStack popExpect "FIELDNAME"
-							my registerCharacter FIELDNAME_END $c
+							set fieldName $fieldNameTemp
+							set fieldNameTemp ""
 						} elseif {$state eq "WAITING_FOR_FIELDVALUE"} {
 							$stateStack popExpect "WAITING_FOR_FIELDVALUE"
 							$stateStack push "FIELDVALUE"
-							my registerCharacter FIELDVALUE_START $c
 						} elseif {$state eq "FIELDVALUE"} {
 							$stateStack popExpect "FIELDVALUE"
-							my registerCharacter FIELDVALUE_END $c
+							puts "FIELDNAME: $fieldName FIELDVALUE: $fieldValueTemp"
+							set fieldName ""
+							set fieldValueTemp ""
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
 					}
 					"," 	{
-						if {$state eq "FIELVALUE" || $state eq "FIELDNAME"} {
-							my registerCharacter CHAR $c
+						if {$state eq "FIELDVALUE"} {
+							$stateStack popExpect "FIELDVALUE"
+							set fieldValueTemp ""
+							# TODO: check if data type is valid!
 						} elseif {$state eq "OBJECT" || $state eq "NONE"} {
 							$stateStack push "WAITING_FOR_NEXT_ELEMENT"
-							my registerCharacter PAIR_SEPERATOR $c
 						} elseif {$state eq "ARRAY"} {
-							my registerCharacter ARRAY_ITEM_SEPERATOR $c
+							# TODO: record
 						} else {
 							error "Encountered $c in wrong state ${state} - Char: $tokenNumber"
 						}
 					}
-					"\\"	{ my registerCharacter CHAR $c }
-					default { my registerCharacter CHAR $c }
+					"\\"	{  }
+					default {
+						if {$state eq "WAITING_FOR_FIELDVALUE"} {
+							$stateStack popExpect "WAITING_FOR_FIELDVALUE"
+							$stateStack push "FIELDVALUE"
+							append fieldValueTemp $c
+						}
+						if {$state eq "FIELDVALUE"} {
+							append fieldValueTemp $c
+						}
+						if {$state eq "FIELDNAME"} {
+							append fieldNameTemp $c
+						}
+					}
 				}
 
 				set newState [$stateStack peek]
 				if {$state ne $newState} {
-					puts "FROM STATE: $state"
-					puts "TO STATE: [$stateStack peek] -> [$stateStack getStack]"
+					puts "'$c': FROM STATE: $state TO STATE: [$stateStack peek] -> [$stateStack getStack]"
 				}
 			}
 		}
